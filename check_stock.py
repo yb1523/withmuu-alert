@@ -1,22 +1,68 @@
+import os
+import time
 import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 URL = "https://withmuu.com/goods/goods_view.php?goodsNo=1000014598"
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 
-response = requests.get(
-    URL,
-    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-)
-response.encoding = 'utf-8'  # 한글 깨짐 방지
-html = response.text
+print("=== 위드뮤 재고 확인 시작 ===")
 
-print("=== 3차: 도대체 뭘 읽어온 걸까? ===")
-title_start = html.find("<title>")
-title_end = html.find("</title>")
+# 1. 가상 크롬 브라우저 설정
+chrome_options = Options()
+chrome_options.add_argument('--headless') # 화면을 띄우지 않고 몰래 실행
+chrome_options.add_argument('--no-sandbox')
+chrome_options.add_argument('--disable-dev-shm-usage')
+chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
 
-if title_start != -1 and title_end != -1:
-    print("📄 페이지 제목:", html[title_start + 7 : title_end])
+driver = webdriver.Chrome(options=chrome_options)
+
+print("🌐 사이트 접속 중...")
+driver.get(URL)
+
+# 2. 쇼핑몰 옵션이 나타날 때까지 5초 대기
+time.sleep(5) 
+
+# 3. 브라우저가 본 전체 화면 HTML 가져오기
+html = driver.page_source
+driver.quit()
+
+print("✅ 화면 읽기 완료! 재고 분석 시작...")
+
+# 4. 재고 파악 로직
+targets = [
+    "JOTA (조타)",
+    "MING (밍)",
+    "ZZEROMMING (제로밍)"
+]
+
+found = []
+
+for target in targets:
+    idx = html.find(target)
+    
+    if idx != -1:
+        # 단어를 찾았다면 그 앞뒤 글자들을 떼어와서 '품절' 관련 단어가 있는지 확인
+        chunk = html[max(0, idx - 200):idx + 100]
+        
+        # 쇼핑몰들이 흔히 쓰는 품절 표시 방식들
+        if 'disabled' not in chunk and 'sold' not in chunk.lower() and '품절' not in chunk:
+            found.append(target)
+    else:
+        print(f"⚠️ 경고: 화면에서 '{target}' 자체를 찾지 못했습니다.")
+
+if found:
+    msg = "🚨 위드뮤 재입고 발견!\n\n" + "\n".join(found)
+    
+    requests.get(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        params={
+            "chat_id": CHAT_ID,
+            "text": msg
+        }
+    )
+    print("📲 텔레그램 알림 전송 완료!")
 else:
-    print("📄 페이지 제목: 찾을 수 없음")
-
-print("\n--- 🔍 HTML 앞부분 500글자 훔쳐보기 ---")
-print(html[:500])
+    print("❌ 아직 재고가 풀리지 않았습니다.")
