@@ -1,28 +1,35 @@
+import os
 import requests
 
 URL = "https://withmuu.com/goods/goods_view.php?goodsNo=1000014598"
 
-BOT_TOKEN = "BOT_TOKEN"
-CHAT_ID = "CHAT_ID"
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 
 html = requests.get(
     URL,
     headers={"User-Agent": "Mozilla/5.0"}
 ).text
 
-alerts = []
+targets = [
+    "JOTA (조타)",
+    "MING (밍)",
+    "ZZEROMMING (제로밍)"
+]
 
-if 'JOTA (조타)</option>' in html and 'disabled="disabled"' not in html.split('JOTA (조타)')[0][-300:]:
-    alerts.append("JOTA")
+found = []
 
-if 'MING (밍)</option>' in html and 'disabled="disabled"' not in html.split('MING (밍)')[0][-300:]:
-    alerts.append("MING")
+for target in targets:
+    idx = html.find(target)
 
-if 'ZZEROMMING (제로밍)</option>' in html and 'disabled="disabled"' not in html.split('ZZEROMMING (제로밍)')[0][-300:]:
-    alerts.append("ZZEROMMING")
+    if idx != -1:
+        chunk = html[max(0, idx - 300):idx]
 
-if alerts:
-    msg = "🚨 위드뮤 재입고 발견!\n\n" + "\n".join(alerts)
+        if 'disabled="disabled"' not in chunk:
+            found.append(target)
+
+if found:
+    msg = "🚨 위드뮤 재입고 발견!\n\n" + "\n".join(found)
 
     requests.get(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
